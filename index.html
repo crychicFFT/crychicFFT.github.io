@@ -6,17 +6,17 @@
   <title>sphyx 的技术博客</title>
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: rgba(255, 255, 255, 0.065);
-      --panel-strong: rgba(255, 255, 255, 0.105);
-      --line: rgba(255, 255, 255, 0.12);
-      --text: #f8fafc;
-      --muted: #9aa4b2;
-      --soft: #cbd5e1;
-      --blue: #7dd3fc;
-      --violet: #c4b5fd;
-      --green: #86efac;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      --bg: #101116;
+      --panel: rgba(255, 255, 255, 0.055);
+      --panel-strong: rgba(255, 255, 255, 0.095);
+      --line: rgba(255, 255, 255, 0.115);
+      --text: #f5f5f4;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --blue: #e7e5e4;
+      --violet: #c7c7cc;
+      --green: #fafafa;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
     }
 
     * {
@@ -66,16 +66,16 @@
       inset: -20%;
       z-index: -2;
       background:
-        radial-gradient(circle at 20% 25%, rgba(125, 211, 252, 0.22), transparent 32%),
-        radial-gradient(circle at 75% 20%, rgba(196, 181, 253, 0.20), transparent 34%),
-        radial-gradient(circle at 50% 85%, rgba(134, 239, 172, 0.13), transparent 35%),
-        linear-gradient(135deg, #060914 0%, #0b1020 48%, #101827 100%);
-      animation: auroraFlow 14s ease-in-out infinite alternate;
+        radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.085), transparent 30%),
+        radial-gradient(circle at 78% 10%, rgba(255, 255, 255, 0.055), transparent 32%),
+        radial-gradient(circle at 50% 90%, rgba(255, 255, 255, 0.045), transparent 36%),
+        linear-gradient(135deg, #090a0d 0%, #101116 48%, #17181d 100%);
+      animation: auroraFlow 16s ease-in-out infinite alternate;
     }
 
     @keyframes auroraFlow {
-      from { transform: translate3d(-2%, -1%, 0) scale(1); filter: hue-rotate(0deg); }
-      to { transform: translate3d(2%, 1.5%, 0) scale(1.05); filter: hue-rotate(12deg); }
+      from { transform: translate3d(-1.2%, -0.8%, 0) scale(1); }
+      to { transform: translate3d(1.2%, 1%, 0) scale(1.035); }
     }
 
     .progress {
@@ -85,7 +85,7 @@
       height: 3px;
       width: 0%;
       z-index: 100;
-      background: linear-gradient(90deg, var(--blue), var(--violet), var(--green));
+      background: linear-gradient(90deg, #9ca3af, #f5f5f4, #a1a1aa);
     }
 
     .container {
@@ -124,8 +124,8 @@
       place-items: center;
       border-radius: 10px;
       color: #08111f;
-      background: linear-gradient(135deg, var(--blue), var(--green));
-      box-shadow: 0 0 34px rgba(125, 211, 252, 0.28);
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      box-shadow: 0 0 34px rgba(245, 245, 244, 0.28);
     }
 
     .nav-links {
@@ -174,14 +174,14 @@
       height: 7px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 0 rgba(134, 239, 172, 0.55);
+      box-shadow: 0 0 0 rgba(229, 229, 229, 0.55);
       animation: pulse 1.9s infinite;
     }
 
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0.55); }
-      70% { box-shadow: 0 0 0 12px rgba(134, 239, 172, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(229, 229, 229, 0.55); }
+      70% { box-shadow: 0 0 0 12px rgba(229, 229, 229, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(229, 229, 229, 0); }
     }
 
     h1 {
@@ -195,7 +195,7 @@
 
     .gradient {
       color: transparent;
-      background: linear-gradient(120deg, #ffffff 0%, var(--blue) 35%, var(--violet) 68%, var(--green) 100%);
+      background: linear-gradient(120deg, #ffffff 0%, #d4d4d8 45%, #9ca3af 100%);
       -webkit-background-clip: text;
       background-clip: text;
       background-size: 220% 220%;
@@ -238,7 +238,7 @@
 
     .btn.primary {
       color: #07111f;
-      background: linear-gradient(135deg, var(--blue), var(--green));
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
     }
 
     .btn.ghost {
@@ -284,7 +284,7 @@
     .status-card:hover {
       transform: translateY(-6px);
       background: var(--panel-strong);
-      border-color: rgba(125, 211, 252, 0.32);
+      border-color: rgba(245, 245, 244, 0.32);
     }
 
     .status-card span {
@@ -345,13 +345,13 @@
       position: absolute;
       inset: 0;
       opacity: 0;
-      background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(125, 211, 252, 0.20), transparent 38%);
+      background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(245, 245, 244, 0.20), transparent 38%);
       transition: opacity 0.35s ease;
     }
 
     .project-card:hover {
       transform: translateY(-8px);
-      border-color: rgba(125, 211, 252, 0.34);
+      border-color: rgba(245, 245, 244, 0.34);
       background: var(--panel-strong);
     }
 
@@ -407,7 +407,7 @@
     .note:hover {
       transform: translateX(8px);
       background: var(--panel-strong);
-      border-color: rgba(134, 239, 172, 0.30);
+      border-color: rgba(229, 229, 229, 0.30);
     }
 
     .note time {
@@ -648,4 +648,73 @@
           <span class="note-arrow">→</span>
         </a>
         <a class="note" href="#">
-          <time
+          <time>Deep Learning</time>
+          <h3>Point Transformer V2 的局部注意力与几何编码理解</h3>
+          <span class="note-arrow">→</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="container reveal" id="about">
+      <div class="about-panel">
+        <div class="about-title">
+          <h2>关于这个博客</h2>
+          <p>简洁、长期、可展示。</p>
+        </div>
+        <div class="about-text">
+          <p>
+            这个博客不是单纯的日记，而是我的技术作品集入口。我希望把研究生前期的学习过程、项目复现过程和工程调试经验整理出来，让每一次解决问题都能留下价值。
+          </p>
+          <div class="chips">
+            <span class="chip">C++</span>
+            <span class="chip">Qt</span>
+            <span class="chip">ROS2</span>
+            <span class="chip">Ubuntu</span>
+            <span class="chip">RealSense</span>
+            <span class="chip">Point Cloud</span>
+            <span class="chip">Deep Learning</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© 2026 sphyx.dev · Built with GitHub Pages</div>
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const revealItems = document.querySelectorAll('.reveal');
+    const cards = document.querySelectorAll('.project-card');
+
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const width = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = `${width}%`;
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('show');
+      });
+    }, { threshold: 0.14 });
+
+    revealItems.forEach((item) => observer.observe(item));
+
+    cards.forEach((card) => {
+      card.addEventListener('pointermove', (event) => {
+        const rect = card.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * 100;
+        const y = ((event.clientY - rect.top) / rect.height) * 100;
+        card.style.setProperty('--x', `${x}%`);
+        card.style.setProperty('--y', `${y}%`);
+      });
+    });
+  </script>
+</body>
+</html>
