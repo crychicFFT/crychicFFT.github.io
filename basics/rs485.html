@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RS485 通信详解 | sphyx.dev</title>
+  <style>
+    :root {
+      --bg: #101116;
+      --panel: rgba(255, 255, 255, 0.055);
+      --panel-strong: rgba(255, 255, 255, 0.095);
+      --line: rgba(255, 255, 255, 0.115);
+      --text: #f5f5f4;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .bg {
+      position: fixed;
+      inset: -20%;
+      z-index: -2;
+      background:
+        radial-gradient(circle at 26% 18%, rgba(255,255,255,0.078), transparent 28%),
+        radial-gradient(circle at 72% 8%, rgba(255,255,255,0.052), transparent 32%),
+        linear-gradient(135deg, #090a0d 0%, #101116 50%, #17181d 100%);
+      animation: bgFloat 18s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgFloat {
+      from { transform: translate3d(-1%, -0.5%, 0) scale(1); }
+      to { transform: translate3d(1%, 1%, 0) scale(1.03); }
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.12;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+      animation: gridMove 24s linear infinite;
+    }
+
+    @keyframes gridMove {
+      from { transform: translateY(0); }
+      to { transform: translateY(56px); }
+    }
+
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 3px;
+      z-index: 100;
+      background: linear-gradient(90deg, #777, #f5f5f4, #777);
+    }
+
+    .container {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+      background: rgba(16,17,22,0.72);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav {
+      height: 68px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #101116;
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      box-shadow: 0 0 34px rgba(245,245,244,0.16);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links a {
+      transition: color 0.25s ease, transform 0.25s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      transform: translateY(-2px);
+    }
+
+    .hero { padding: 86px 0 42px; }
+
+    .crumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 26px;
+      color: var(--muted);
+      font-size: 14px;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .crumb a:hover { color: var(--text); }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 22px;
+      font-size: clamp(42px, 7vw, 86px);
+      line-height: 1;
+      letter-spacing: -0.075em;
+      animation: fadeUp 0.75s 0.08s ease both;
+    }
+
+    .gradient {
+      color: transparent;
+      background: linear-gradient(120deg, #fff, #d4d4d8 50%, #8b8b92);
+      -webkit-background-clip: text;
+      background-clip: text;
+      background-size: 220% 220%;
+      animation: textShift 7s ease-in-out infinite alternate;
+    }
+
+    @keyframes textShift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
+    }
+
+    .lead {
+      max-width: 780px;
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.9;
+      animation: fadeUp 0.75s 0.16s ease both;
+    }
+
+    .quick-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      animation: fadeUp 0.75s 0.24s ease both;
+    }
+
+    .quick-nav a {
+      padding: 10px 13px;
+      border-radius: 999px;
+      color: var(--soft);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--line);
+      transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+    }
+
+    .quick-nav a:hover {
+      transform: translateY(-3px);
+      color: var(--text);
+      background: var(--panel-strong);
+    }
+
+    section { padding: 48px 0; }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -0.06em;
+    }
+
+    .section-head p {
+      max-width: 560px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .metric {
+      padding: 22px;
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .metric:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 22px;
+      letter-spacing: -0.035em;
+    }
+
+    .metric p {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card { padding: 26px; }
+
+    .card h3 {
+      margin-bottom: 14px;
+      font-size: 24px;
+      letter-spacing: -0.045em;
+    }
+
+    .card p {
+      color: var(--muted);
+      line-height: 1.85;
+    }
+
+    .item-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .item b { color: var(--text); }
+
+    .item span {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .bus-stage, .diff-stage, .modbus-stage {
+      position: relative;
+      min-height: 380px;
+      overflow: hidden;
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 36px 36px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .device {
+      position: absolute;
+      min-width: 112px;
+      padding: 15px 14px;
+      border-radius: 22px;
+      text-align: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.13);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.24);
+      z-index: 2;
+    }
+
+    .device strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .device small { color: var(--muted); }
+
+    .wire {
+      position: absolute;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.24);
+      overflow: hidden;
+    }
+
+    .wire::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 34%;
+      background: linear-gradient(90deg, transparent, rgba(245,245,244,0.95), transparent);
+      transform: translateX(-120%);
+      animation: wireFlow 2.6s ease-in-out infinite;
+    }
+
+    @keyframes wireFlow { to { transform: translateX(360%); } }
+
+    .vertical {
+      position: absolute;
+      width: 2px;
+      background: rgba(255,255,255,0.22);
+      border-radius: 999px;
+    }
+
+    .label {
+      position: absolute;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--soft);
+      font-size: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.09);
+      z-index: 3;
+    }
+
+    .packet {
+      position: absolute;
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 14px;
+      background: rgba(245,245,244,0.10);
+      border: 1px solid rgba(245,245,244,0.22);
+      box-shadow: 0 0 24px rgba(245,245,244,0.12);
+      z-index: 4;
+      opacity: 0;
+    }
+
+    .bit {
+      min-width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #111216;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 0 5px;
+      background: #f5f5f4;
+    }
+
+    .bit.dim {
+      color: var(--text);
+      background: rgba(255,255,255,0.12);
+    }
+
+    /* Bus animation */
+    .master { left: 8%; top: 38px; }
+    .slave-a { left: 22%; bottom: 38px; }
+    .slave-b { left: 48%; bottom: 38px; }
+    .slave-c { right: 8%; bottom: 38px; }
+    .bus-a { left: 10%; right: 10%; top: 142px; }
+    .bus-b { left: 10%; right: 10%; top: 198px; }
+    .drop-master { left: 14.5%; top: 88px; height: 110px; }
+    .drop-a { left: 29%; top: 198px; height: 66px; }
+    .drop-b { left: 55%; top: 198px; height: 66px; }
+    .drop-c { right: 14.5%; top: 198px; height: 66px; }
+    .bus-packet { left: 16%; top: 158px; }
+    .running .bus-packet { animation: busPacket 4.2s ease-in-out infinite; }
+
+    @keyframes busPacket {
+      0% { opacity: 0; transform: translateX(0); }
+      10% { opacity: 1; }
+      68% { opacity: 1; transform: translateX(550px); }
+      100% { opacity: 0; transform: translateX(620px); }
+    }
+
+    .terminate {
+      position: absolute;
+      top: 123px;
+      width: 18px;
+      height: 96px;
+      border-radius: 10px;
+      border: 1px solid rgba(245,245,244,0.34);
+      background: repeating-linear-gradient(45deg, rgba(245,245,244,0.18), rgba(245,245,244,0.18) 5px, rgba(255,255,255,0.04) 5px, rgba(255,255,255,0.04) 10px);
+    }
+
+    .terminate.left { left: 8%; }
+    .terminate.right { right: 8%; }
+
+    /* Differential animation */
+    .diff-stage { padding: 24px; }
+    .wave-wrap {
+      position: relative;
+      height: 260px;
+      border-radius: 22px;
+      background: rgba(0,0,0,0.14);
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .axis {
+      position: absolute;
+      left: 34px;
+      right: 34px;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .axis.a { top: 86px; }
+    .axis.b { top: 176px; }
+
+    .diff-label { position: absolute; left: 24px; color: var(--muted); font-size: 13px; }
+    .diff-label.a { top: 62px; }
+    .diff-label.b { top: 152px; }
+
+    .pulse-line {
+      position: absolute;
+      left: 80px;
+      width: 70%;
+      height: 40px;
+      border-top: 3px solid rgba(245,245,244,0.82);
+      border-right: 3px solid rgba(245,245,244,0.28);
+      opacity: 0.35;
+      transform-origin: left center;
+    }
+
+    .pulse-line.a1 { top: 54px; }
+    .pulse-line.a2 { top: 92px; left: 170px; width: 50%; }
+    .pulse-line.b1 { top: 186px; }
+    .pulse-line.b2 { top: 148px; left: 170px; width: 50%; }
+    .running .pulse-line { animation: glowPulse 1.8s ease-in-out infinite; }
+    .running .pulse-line.a2, .running .pulse-line.b2 { animation-delay: 0.5s; }
+
+    @keyframes glowPulse {
+      0%,100% { opacity: 0.28; filter: none; }
+      45% { opacity: 1; filter: drop-shadow(0 0 10px rgba(245,245,244,0.55)); }
+    }
+
+    .diff-note {
+      margin-top: 18px;
+      padding: 15px 16px;
+      border-radius: 18px;
+      color: var(--soft);
+      line-height: 1.75;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Modbus */
+    .mod-master { left: 7%; top: 112px; }
+    .mod-slave { right: 7%; top: 112px; }
+    .mod-wire { left: 24%; right: 24%; top: 160px; }
+    .mod-query { left: 26%; top: 130px; }
+    .mod-reply { right: 26%; top: 186px; }
+    .running .mod-query { animation: queryMove 4.2s ease-in-out infinite; }
+    .running .mod-reply { animation: replyMove 4.2s ease-in-out infinite; }
+
+    @keyframes queryMove {
+      0% { opacity: 0; transform: translateX(0); }
+      12% { opacity: 1; }
+      48% { opacity: 1; transform: translateX(310px); }
+      58%,100% { opacity: 0; transform: translateX(350px); }
+    }
+
+    @keyframes replyMove {
+      0%,46% { opacity: 0; transform: translateX(0); }
+      58% { opacity: 1; }
+      86% { opacity: 1; transform: translateX(-310px); }
+      100% { opacity: 0; transform: translateX(-350px); }
+    }
+
+    .status-line {
+      position: absolute;
+      left: 50%;
+      bottom: 34px;
+      transform: translateX(-50%);
+      width: min(84%, 520px);
+      padding: 13px 16px;
+      border-radius: 18px;
+      color: var(--soft);
+      text-align: center;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 17px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    th {
+      color: var(--soft);
+      font-size: 14px;
+      background: rgba(255,255,255,0.045);
+    }
+
+    td {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .next-card {
+      display: block;
+      padding: 22px;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .next-card:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .next-card span { color: var(--muted); font-size: 13px; }
+    .next-card h3 { margin: 10px 0; font-size: 20px; letter-spacing: -0.035em; }
+    .next-card p { color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+
+    .reveal.show { opacity: 1; transform: translateY(0); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    footer {
+      padding: 40px 0 58px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 920px) {
+      .nav-links { display: none; }
+      .overview-grid, .two-col, .next-grid { grid-template-columns: 1fr; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 12px; }
+      @keyframes busPacket {
+        0% { opacity: 0; transform: translateX(0); }
+        10% { opacity: 1; }
+        68% { opacity: 1; transform: translateX(330px); }
+        100% { opacity: 0; transform: translateX(380px); }
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 26px, 1120px); }
+      .device { min-width: 86px; padding: 12px 10px; font-size: 13px; }
+      .bit { min-width: 21px; height: 21px; font-size: 11px; }
+      .item { grid-template-columns: 1fr; }
+      .status-line { width: 90%; font-size: 13px; }
+      .master { left: 5%; }
+      .slave-c { right: 5%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <div class="bg"></div>
+  <div class="grid"></div>
+
+  <header>
+    <nav class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">S</span>
+        <span>sphyx.dev</span>
+      </a>
+      <div class="nav-links">
+        <a href="communication.html">通信总览</a>
+        <a href="#wiring">总线</a>
+        <a href="#diff">差分</a>
+        <a href="#modbus">Modbus</a>
+        <a href="#trouble">排错</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="container hero">
+      <div class="crumb">
+        <a href="../index.html">首页</a>
+        <span>/</span>
+        <a href="communication.html">通信基础知识</a>
+        <span>/</span>
+        <span>RS485</span>
+      </div>
+      <h1>RS485 通信<span class="gradient">详细页</span></h1>
+      <p class="lead">
+        RS485 不是具体协议，而是一种常见的物理层电气标准。它用 A/B 差分线传输信号，抗干扰能力强，适合工业现场、多节点、较远距离通信。
+      </p>
+      <div class="quick-nav">
+        <a href="#overview">核心概念</a>
+        <a href="#wiring">总线接线</a>
+        <a href="#diff">差分信号</a>
+        <a href="#modbus">Modbus RTU</a>
+        <a href="#compare">参数对比</a>
+        <a href="#trouble">排错清单</a>
+      </div>
+    </section>
+
+    <section class="container reveal" id="overview">
+      <div class="section-head">
+        <h2>核心概念</h2>
+        <p>可以把 RS485 理解为“更适合工业现场的串口物理层”：它解决的是抗干扰、距离和多节点问题。</p>
+      </div>
+      <div class="overview-grid">
+        <div class="panel metric">
+          <span>Signal</span>
+          <strong>A / B 差分线</strong>
+          <p>接收端判断 A 与 B 的电压差，而不是单根线相对地的电压。</p>
+        </div>
+        <div class="panel metric">
+          <span>Topology</span>
+          <strong>多节点总线</strong>
+          <p>多个设备可以挂在同一对 A/B 线上，但需要控制谁在什么时候发送。</p>
+        </div>
+        <div class="panel metric">
+          <span>Duplex</span>
+          <strong>常见半双工</strong>
+          <p>两线 RS485 常见为半双工，同一时间通常只能一个方向发送。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="wiring">
+      <div class="section-head">
+        <h2>总线接线动画</h2>
+        <p>RS485 常见接法是一对 A/B 线贯穿所有节点，两端加终端电阻，中间节点尽量短支线接入。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>接线重点</h3>
+          <p>RS485 的优势来自差分传输和总线结构，但真实工程里更容易因为接线拓扑、终端电阻、A/B 标注不统一而出问题。</p>
+          <div class="item-list">
+            <div class="item"><b>A / B</b><span>主通信线。不同厂家可能把 A/B、D+/D- 标注方向写得不一致，调试时要结合文档和实际测试。</span></div>
+            <div class="item"><b>GND</b><span>很多场景建议接信号地，给系统提供共同参考，降低共模干扰风险。</span></div>
+            <div class="item"><b>120Ω</b><span>长线或高速通信时，总线两端常加 120Ω 终端电阻，减少反射。</span></div>
+          </div>
+        </div>
+        <div class="panel card running">
+          <div class="bus-stage">
+            <div class="terminate left"></div>
+            <div class="terminate right"></div>
+            <div class="device master"><strong>Master</strong><small>主站</small></div>
+            <div class="device slave-a"><strong>Slave 1</strong><small>从站</small></div>
+            <div class="device slave-b"><strong>Slave 2</strong><small>从站</small></div>
+            <div class="device slave-c"><strong>Slave 3</strong><small>从站</small></div>
+            <div class="wire bus-a"></div>
+            <div class="wire bus-b"></div>
+            <div class="vertical drop-master"></div>
+            <div class="vertical drop-a"></div>
+            <div class="vertical drop-b"></div>
+            <div class="vertical drop-c"></div>
+            <span class="label" style="left:11%;top:116px">A+</span>
+            <span class="label" style="left:11%;top:204px">B-</span>
+            <span class="label" style="left:6.5%;top:226px">120Ω</span>
+            <span class="label" style="right:6.5%;top:226px">120Ω</span>
+            <div class="packet bus-packet">
+              <span class="bit">ADDR</span>
+              <span class="bit dim">03</span>
+              <span class="bit">CRC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="diff">
+      <div class="section-head">
+        <h2>差分信号动画</h2>
+        <p>RS485 的关键不是“电压绝对值”，而是 A 与 B 之间的电压差。外界噪声同时影响两根线时，差值仍然相对稳定。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel diff-stage running">
+          <div class="wave-wrap">
+            <div class="axis a"></div>
+            <div class="axis b"></div>
+            <span class="diff-label a">A 线</span>
+            <span class="diff-label b">B 线</span>
+            <div class="pulse-line a1"></div>
+            <div class="pulse-line a2"></div>
+            <div class="pulse-line b1"></div>
+            <div class="pulse-line b2"></div>
+          </div>
+          <div class="diff-note"><b>理解重点：</b> 接收器比较 A/B 差值，所以差分传输比单端信号更适合长线和强干扰环境。</div>
+        </div>
+        <div class="panel card">
+          <h3>为什么抗干扰？</h3>
+          <p>在工业现场，电机、继电器、长线缆都会带来噪声。差分传输中，干扰往往同时叠加到 A、B 两根线上，接收端做差后，公共噪声被抵消一部分。</p>
+          <div class="item-list">
+            <div class="item"><b>单端</b><span>例如普通 TTL 串口，常看某根线相对 GND 的电压。</span></div>
+            <div class="item"><b>差分</b><span>RS485 看 A 与 B 的差值，因此对共模噪声更不敏感。</span></div>
+            <div class="item"><b>屏蔽线</b><span>现场布线时常使用双绞线或屏蔽双绞线，进一步提升抗干扰能力。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="modbus">
+      <div class="section-head">
+        <h2>Modbus RTU 场景</h2>
+        <p>RS485 是物理层，Modbus RTU 是常见上层协议。很多电池、传感器、仪表都采用“RS485 + Modbus RTU”。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>主从问答模型</h3>
+          <p>常见模式是主站发请求，从站根据地址响应。总线上多个从站共享线路，但同一时刻通常只有一个设备回答。</p>
+          <div class="item-list">
+            <div class="item"><b>地址</b><span>区分总线上的不同从站，例如 01、02、03。</span></div>
+            <div class="item"><b>功能码</b><span>表示读寄存器、写寄存器等操作，例如 03 读保持寄存器。</span></div>
+            <div class="item"><b>CRC</b><span>用于校验一帧数据是否在传输中出错。</span></div>
+          </div>
+        </div>
+        <div class="panel card running">
+          <div class="modbus-stage">
+            <div class="device mod-master"><strong>Master</strong><small>上位机</small></div>
+            <div class="device mod-slave"><strong>Slave 01</strong><small>BMS / 仪表</small></div>
+            <div class="wire mod-wire"></div>
+            <div class="packet mod-query">
+              <span class="bit">01</span>
+              <span class="bit dim">03</span>
+              <span class="bit">CRC</span>
+            </div>
+            <div class="packet mod-reply">
+              <span class="bit dim">01</span>
+              <span class="bit">DATA</span>
+              <span class="bit dim">CRC</span>
+            </div>
+            <div class="status-line">主站请求 → 从站匹配地址 → 返回数据 → CRC 校验</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="compare">
+      <div class="section-head">
+        <h2>常见参数与工程注意</h2>
+        <p>RS485 调试时，要同时检查串口参数、硬件接线、协议帧格式和收发方向控制。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>常见情况</th>
+              <th>说明</th>
+              <th>错误表现</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>波特率</td>
+              <td>9600 / 19200 / 115200</td>
+              <td>主从设备必须一致。</td>
+              <td>乱码、无响应、CRC 错误。</td>
+            </tr>
+            <tr>
+              <td>A/B 极性</td>
+              <td>A/B、D+/D- 标注不统一</td>
+              <td>不同厂家命名可能相反，必要时交换 A/B 测试。</td>
+              <td>完全收不到数据。</td>
+            </tr>
+            <tr>
+              <td>终端电阻</td>
+              <td>总线两端 120Ω</td>
+              <td>长距离、高速、多节点时更重要。</td>
+              <td>通信偶发失败、不稳定。</td>
+            </tr>
+            <tr>
+              <td>半双工方向</td>
+              <td>DE/RE 控制收发</td>
+              <td>有些芯片需要软件控制发送/接收方向。</td>
+              <td>只能发不能收，或回包丢失。</td>
+            </tr>
+            <tr>
+              <td>协议格式</td>
+              <td>Modbus RTU 常见</td>
+              <td>地址、功能码、寄存器、CRC 都要正确。</td>
+              <td>设备不回复或回复异常码。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="container reveal" id="trouble">
+      <div class="section-head">
+        <h2>常见排错清单</h2>
+        <p>RS485 调不通时，建议先当成“硬件总线 + 串口参数 + 协议帧”三层来排查。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>硬件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>确认 A/B 是否接对，必要时交换 A/B 测试。</span></div>
+            <div class="item"><b>02</b><span>确认是否需要 GND 共地，尤其是不同电源系统之间。</span></div>
+            <div class="item"><b>03</b><span>确认总线两端是否需要 120Ω 终端电阻。</span></div>
+            <div class="item"><b>04</b><span>确认 USB-RS485 转换器是否被系统识别。</span></div>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>软件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>确认波特率、数据位、校验位、停止位一致。</span></div>
+            <div class="item"><b>02</b><span>确认从站地址是否正确。</span></div>
+            <div class="item"><b>03</b><span>确认功能码、寄存器地址、数据长度是否符合设备手册。</span></div>
+            <div class="item"><b>04</b><span>确认 CRC 字节顺序和帧间隔是否正确。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal">
+      <div class="section-head">
+        <h2>继续学习</h2>
+        <p>理解 RS485 后，可以继续学习 CAN：它也是工业/机器人常用总线，但具备更完善的仲裁和错误处理机制。</p>
+      </div>
+      <div class="next-grid">
+        <a class="next-card" href="communication.html">
+          <span>Back</span>
+          <h3>通信基础总览</h3>
+          <p>返回通信基础知识页面，查看所有接口动画。</p>
+        </a>
+        <a class="next-card" href="uart.html">
+          <span>Previous</span>
+          <h3>UART 详细页</h3>
+          <p>回顾最基础的 TX/RX 串口通信与帧结构。</p>
+        </a>
+        <a class="next-card" href="can.html">
+          <span>Next</span>
+          <h3>CAN 详细页</h3>
+          <p>理解 CAN_H / CAN_L、报文 ID、仲裁和错误处理。</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© 2026 sphyx.dev · RS485 Basics</div>
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const revealItems = document.querySelectorAll('.reveal');
+
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const width = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = `${width}%`;
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('show');
+      });
+    }, { threshold: 0.12 });
+
+    revealItems.forEach((item) => observer.observe(item));
+  </script>
+</body>
+</html>
