@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USB 通信详解 | sphyx.dev</title>
+  <style>
+    :root {
+      --bg: #101116;
+      --panel: rgba(255, 255, 255, 0.055);
+      --panel-strong: rgba(255, 255, 255, 0.095);
+      --line: rgba(255, 255, 255, 0.115);
+      --text: #f5f5f4;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .bg {
+      position: fixed;
+      inset: -20%;
+      z-index: -2;
+      background:
+        radial-gradient(circle at 26% 18%, rgba(255,255,255,0.078), transparent 28%),
+        radial-gradient(circle at 72% 8%, rgba(255,255,255,0.052), transparent 32%),
+        linear-gradient(135deg, #090a0d 0%, #101116 50%, #17181d 100%);
+      animation: bgFloat 18s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgFloat {
+      from { transform: translate3d(-1%, -0.5%, 0) scale(1); }
+      to { transform: translate3d(1%, 1%, 0) scale(1.03); }
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.12;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+      animation: gridMove 24s linear infinite;
+    }
+
+    @keyframes gridMove {
+      from { transform: translateY(0); }
+      to { transform: translateY(56px); }
+    }
+
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 3px;
+      z-index: 100;
+      background: linear-gradient(90deg, #777, #f5f5f4, #777);
+    }
+
+    .container {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+      background: rgba(16,17,22,0.72);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav {
+      height: 68px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #101116;
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      box-shadow: 0 0 34px rgba(245,245,244,0.16);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links a { transition: color 0.25s ease, transform 0.25s ease; }
+    .nav-links a:hover { color: var(--text); transform: translateY(-2px); }
+
+    .hero { padding: 86px 0 42px; }
+
+    .crumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 26px;
+      color: var(--muted);
+      font-size: 14px;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .crumb a:hover { color: var(--text); }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 22px;
+      font-size: clamp(42px, 7vw, 86px);
+      line-height: 1;
+      letter-spacing: -0.075em;
+      animation: fadeUp 0.75s 0.08s ease both;
+    }
+
+    .gradient {
+      color: transparent;
+      background: linear-gradient(120deg, #fff, #d4d4d8 50%, #8b8b92);
+      -webkit-background-clip: text;
+      background-clip: text;
+      background-size: 220% 220%;
+      animation: textShift 7s ease-in-out infinite alternate;
+    }
+
+    @keyframes textShift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
+    }
+
+    .lead {
+      max-width: 790px;
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.9;
+      animation: fadeUp 0.75s 0.16s ease both;
+    }
+
+    .quick-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      animation: fadeUp 0.75s 0.24s ease both;
+    }
+
+    .quick-nav a {
+      padding: 10px 13px;
+      border-radius: 999px;
+      color: var(--soft);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--line);
+      transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+    }
+
+    .quick-nav a:hover {
+      transform: translateY(-3px);
+      color: var(--text);
+      background: var(--panel-strong);
+    }
+
+    section { padding: 48px 0; }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -0.06em;
+    }
+
+    .section-head p {
+      max-width: 560px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .metric {
+      padding: 22px;
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .metric:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 22px;
+      letter-spacing: -0.035em;
+    }
+
+    .metric p {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card { padding: 26px; }
+
+    .card h3 {
+      margin-bottom: 14px;
+      font-size: 24px;
+      letter-spacing: -0.045em;
+    }
+
+    .card p {
+      color: var(--muted);
+      line-height: 1.85;
+    }
+
+    .item-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 104px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .item b { color: var(--text); }
+
+    .item span {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 400px;
+      overflow: hidden;
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 36px 36px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .device {
+      position: absolute;
+      min-width: 118px;
+      padding: 15px 14px;
+      border-radius: 22px;
+      text-align: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.13);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.24);
+      z-index: 2;
+    }
+
+    .device strong { display: block; margin-bottom: 5px; }
+    .device small { color: var(--muted); }
+
+    .host { left: 7%; top: 140px; }
+    .hub { left: 42%; top: 140px; }
+    .dev-a { right: 7%; top: 62px; }
+    .dev-b { right: 7%; top: 214px; }
+
+    .wire {
+      position: absolute;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.24);
+      overflow: hidden;
+    }
+
+    .wire::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 34%;
+      background: linear-gradient(90deg, transparent, rgba(245,245,244,0.95), transparent);
+      transform: translateX(-120%);
+      animation: wireFlow 2.6s ease-in-out infinite;
+    }
+
+    @keyframes wireFlow { to { transform: translateX(360%); } }
+
+    .wire-host { left: 24%; right: 45%; top: 190px; }
+    .wire-dev-a { left: 53%; right: 20%; top: 115px; transform: rotate(-18deg); transform-origin: left center; }
+    .wire-dev-b { left: 53%; right: 20%; top: 268px; transform: rotate(18deg); transform-origin: left center; }
+
+    .label {
+      position: absolute;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--soft);
+      font-size: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.09);
+      z-index: 3;
+    }
+
+    .packet {
+      position: absolute;
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 14px;
+      background: rgba(245,245,244,0.10);
+      border: 1px solid rgba(245,245,244,0.22);
+      box-shadow: 0 0 24px rgba(245,245,244,0.12);
+      z-index: 4;
+      opacity: 0;
+    }
+
+    .bit {
+      min-width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #111216;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 0 5px;
+      background: #f5f5f4;
+    }
+
+    .bit.dim {
+      color: var(--text);
+      background: rgba(255,255,255,0.12);
+    }
+
+    .usb-packet { left: 24%; top: 162px; }
+    .usb-reply { right: 24%; top: 218px; }
+    .running .usb-packet { animation: usbForward 4.2s ease-in-out infinite; }
+    .running .usb-reply { animation: usbBack 4.2s ease-in-out infinite; }
+
+    @keyframes usbForward {
+      0% { opacity: 0; transform: translateX(0); }
+      10% { opacity: 1; }
+      50% { opacity: 1; transform: translateX(280px); }
+      72% { opacity: 1; transform: translateX(420px) translateY(-70px); }
+      100% { opacity: 0; transform: translateX(460px) translateY(-78px); }
+    }
+
+    @keyframes usbBack {
+      0%, 45% { opacity: 0; transform: translateX(0); }
+      58% { opacity: 1; }
+      84% { opacity: 1; transform: translateX(-280px); }
+      100% { opacity: 0; transform: translateX(-330px); }
+    }
+
+    /* enumeration */
+    .enum-flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .enum-step {
+      min-height: 138px;
+      padding: 18px;
+      border-radius: 24px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: transform 0.25s ease, background 0.25s ease;
+    }
+
+    .enum-step:hover {
+      transform: translateY(-5px);
+      background: rgba(255,255,255,0.075);
+    }
+
+    .enum-step b {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 17px;
+    }
+
+    .enum-step span {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 13px;
+    }
+
+    /* fields */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+
+    .field {
+      cursor: pointer;
+      min-height: 86px;
+      padding: 13px 10px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.09);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .field:hover, .field.active {
+      transform: translateY(-6px);
+      background: rgba(245,245,244,0.15);
+      border-color: rgba(245,245,244,0.28);
+    }
+
+    .field b { display: block; margin-bottom: 8px; font-size: 16px; }
+    .field span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .field-detail {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 20px;
+      color: var(--soft);
+      line-height: 1.8;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 780px;
+    }
+
+    th, td {
+      padding: 17px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    th {
+      color: var(--soft);
+      font-size: 14px;
+      background: rgba(255,255,255,0.045);
+    }
+
+    td { color: var(--muted); line-height: 1.7; }
+    tr:last-child td { border-bottom: 0; }
+
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .next-card {
+      display: block;
+      padding: 22px;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .next-card:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .next-card span { color: var(--muted); font-size: 13px; }
+    .next-card h3 { margin: 10px 0; font-size: 20px; letter-spacing: -0.035em; }
+    .next-card p { color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+
+    .reveal.show { opacity: 1; transform: translateY(0); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    footer {
+      padding: 40px 0 58px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1020px) {
+      .enum-flow { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 920px) {
+      .nav-links { display: none; }
+      .overview-grid, .two-col, .next-grid { grid-template-columns: 1fr; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 12px; }
+      .field-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 26px, 1120px); }
+      .device { min-width: 88px; padding: 12px 10px; font-size: 13px; }
+      .bit { min-width: 21px; height: 21px; font-size: 11px; }
+      .item { grid-template-columns: 1fr; }
+      .field-grid, .enum-flow { grid-template-columns: 1fr; }
+      .host { left: 5%; }
+      .hub { left: 39%; }
+      .dev-a, .dev-b { right: 4%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <div class="bg"></div>
+  <div class="grid"></div>
+
+  <header>
+    <nav class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">S</span>
+        <span>sphyx.dev</span>
+      </a>
+      <div class="nav-links">
+        <a href="communication.html">通信总览</a>
+        <a href="#bus">结构</a>
+        <a href="#enum">枚举</a>
+        <a href="#class">设备类</a>
+        <a href="#trouble">排错</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="container hero">
+      <div class="crumb">
+        <a href="../index.html">首页</a>
+        <span>/</span>
+        <a href="communication.html">通信基础知识</a>
+        <span>/</span>
+        <span>USB</span>
+      </div>
+      <h1>USB 通信<span class="gradient">详细页</span></h1>
+      <p class="lead">
+        USB 是上位机连接外设最常见的接口之一。它不仅是一根线缆，也包含主机、设备、枚举、端点、设备类和驱动模型。很多常见工具本质上都是 USB 转其他通信接口。
+      </p>
+      <div class="quick-nav">
+        <a href="#overview">核心概念</a>
+        <a href="#bus">连接结构</a>
+        <a href="#enum">枚举流程</a>
+        <a href="#class">设备类</a>
+        <a href="#convert">转接场景</a>
+        <a href="#trouble">排错清单</a>
+      </div>
+    </section>
+
+    <section class="container reveal" id="overview">
+      <div class="section-head">
+        <h2>核心概念</h2>
+        <p>USB 的重点是“主机管理设备”：设备插入后，主机会识别设备类型、分配地址、加载驱动，然后建立数据通道。</p>
+      </div>
+      <div class="overview-grid">
+        <div class="panel metric">
+          <span>Role</span>
+          <strong>Host / Device</strong>
+          <p>USB 通常由主机发起和管理通信，外设作为 Device 响应主机请求。</p>
+        </div>
+        <div class="panel metric">
+          <span>Signals</span>
+          <strong>D+ / D- / VBUS / GND</strong>
+          <p>D+ 和 D- 用于差分数据传输，VBUS 提供电源，GND 提供参考地。</p>
+        </div>
+        <div class="panel metric">
+          <span>Model</span>
+          <strong>端点 / 设备类 / 驱动</strong>
+          <p>应用层通常通过串口、HID、批量传输或厂家驱动访问 USB 设备。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="bus">
+      <div class="section-head">
+        <h2>连接结构动画</h2>
+        <p>USB 常见结构是主机连接设备，也可以通过 Hub 扩展多个设备。通信由主机调度。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>接线与角色</h3>
+          <p>USB 和 UART/SPI 不同，它不是简单把几根线接上就能直接收发。USB 设备需要被主机枚举，并依赖设备类或驱动工作。</p>
+          <div class="item-list">
+            <div class="item"><b>VBUS</b><span>USB 电源线，常见 5V。设备可能从这里取电。</span></div>
+            <div class="item"><b>D+ / D-</b><span>差分数据线，用于 USB 数据传输。</span></div>
+            <div class="item"><b>GND</b><span>公共地，为电源和信号提供参考。</span></div>
+            <div class="item"><b>Host</b><span>主机负责枚举、地址分配、调度传输和加载驱动。</span></div>
+          </div>
+        </div>
+
+        <div class="panel card running">
+          <div class="stage">
+            <div class="device host"><strong>Host</strong><small>PC / 上位机</small></div>
+            <div class="device hub"><strong>USB Hub</strong><small>扩展</small></div>
+            <div class="device dev-a"><strong>Device A</strong><small>USB-TTL</small></div>
+            <div class="device dev-b"><strong>Device B</strong><small>USB-CAN</small></div>
+            <div class="wire wire-host"></div>
+            <div class="wire wire-dev-a"></div>
+            <div class="wire wire-dev-b"></div>
+            <span class="label" style="left:27%;top:166px">D+ / D-</span>
+            <span class="label" style="left:55%;top:98px">枚举</span>
+            <span class="label" style="left:55%;top:286px">数据传输</span>
+            <div class="packet usb-packet"><span class="bit">SETUP</span><span class="bit dim">ADDR</span></div>
+            <div class="packet usb-reply"><span class="bit dim">DESC</span><span class="bit">OK</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="enum">
+      <div class="section-head">
+        <h2>USB 枚举流程</h2>
+        <p>设备插入电脑后，系统并不是立刻“直接通信”，而是先完成枚举和驱动匹配。</p>
+      </div>
+      <div class="panel card">
+        <div class="enum-flow">
+          <div class="enum-step"><b>1. 插入设备</b><span>主机检测到 USB 设备接入，开始复位和初始化。</span></div>
+          <div class="enum-step"><b>2. 读取描述符</b><span>主机读取设备描述符、配置描述符、接口描述符等信息。</span></div>
+          <div class="enum-step"><b>3. 分配地址</b><span>主机给设备分配 USB 地址，后续通过该地址访问设备。</span></div>
+          <div class="enum-step"><b>4. 匹配驱动</b><span>系统根据 VID、PID、设备类匹配驱动程序。</span></div>
+          <div class="enum-step"><b>5. 建立通道</b><span>应用程序通过串口、HID、Bulk 等方式访问设备。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="class">
+      <div class="section-head">
+        <h2>设备类与传输方式</h2>
+        <p>USB 设备不是都用同一种方式通信。点击下面字段查看常见设备类和含义。</p>
+      </div>
+      <div class="panel card">
+        <div class="field-grid">
+          <div class="field active" data-title="CDC 虚拟串口" data-desc="CDC 类常用于 USB 转串口设备。系统识别后会出现 COM 口或 /dev/ttyACM、/dev/ttyUSB 设备。"><b>CDC</b><span>虚拟串口</span></div>
+          <div class="field" data-title="HID 人机接口" data-desc="HID 常用于键盘、鼠标、手柄，也可用于简单自定义设备通信，优点是不一定需要额外驱动。"><b>HID</b><span>键鼠/控制器</span></div>
+          <div class="field" data-title="MSC 大容量存储" data-desc="U 盘、移动硬盘等常使用 Mass Storage Class，系统会识别为存储设备。"><b>MSC</b><span>存储设备</span></div>
+          <div class="field" data-title="UVC 视频类" data-desc="USB 摄像头常见 UVC 类，系统可通过标准视频接口访问图像流。"><b>UVC</b><span>视频设备</span></div>
+          <div class="field" data-title="Bulk 传输" data-desc="Bulk 传输适合大量数据，强调可靠性，不强调固定延迟，常见于自定义设备和高速数据传输。"><b>Bulk</b><span>批量传输</span></div>
+          <div class="field" data-title="Control 传输" data-desc="Control 传输用于枚举、配置和控制请求，USB 设备都会用到端点 0。"><b>Control</b><span>控制传输</span></div>
+        </div>
+        <div class="field-detail" id="fieldDetail"><b>CDC 虚拟串口：</b>CDC 类常用于 USB 转串口设备。系统识别后会出现 COM 口或 /dev/ttyACM、/dev/ttyUSB 设备。</div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="convert">
+      <div class="section-head">
+        <h2>常见 USB 转接场景</h2>
+        <p>很多时候我们说“用 USB 通信”，实际是 USB 在电脑侧，设备侧转换成 UART、RS485、CAN 等接口。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>设备类型</th>
+              <th>电脑侧表现</th>
+              <th>设备侧接口</th>
+              <th>常见用途</th>
+              <th>注意点</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>USB 转 TTL 串口</td><td>COM / ttyUSB</td><td>UART TX/RX</td><td>单片机调试、模块通信</td><td>注意 3.3V/5V 电平和 TX/RX 交叉</td></tr>
+            <tr><td>USB 转 RS485</td><td>COM / ttyUSB</td><td>A/B 差分线</td><td>BMS、传感器、Modbus RTU</td><td>注意 A/B 极性、终端电阻和从站地址</td></tr>
+            <tr><td>USB 转 CAN</td><td>专用驱动/SocketCAN</td><td>CAN_H/CAN_L</td><td>电机、底盘、CAN 设备调试</td><td>注意波特率、终端电阻和 ID 过滤</td></tr>
+            <tr><td>USB 摄像头</td><td>视频设备</td><td>UVC / 厂家协议</td><td>图像采集、视觉调试</td><td>注意带宽、分辨率、帧率和驱动</td></tr>
+            <tr><td>USB 调试器</td><td>调试接口</td><td>JTAG / SWD</td><td>程序下载、芯片调试</td><td>注意驱动、目标板供电和接口定义</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="container reveal" id="compare">
+      <div class="section-head">
+        <h2>参数与应用</h2>
+        <p>USB 的复杂度比普通串口更高，但生态成熟，适合电脑连接各类外设。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>常见情况</th>
+              <th>说明</th>
+              <th>错误表现</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>角色</td><td>Host / Device</td><td>主机管理设备，设备响应主机请求。</td><td>两个 Device 直接相连通常不能通信。</td></tr>
+            <tr><td>识别</td><td>VID / PID / 设备类</td><td>系统根据这些信息加载驱动。</td><td>设备未知、驱动异常、无法打开。</td></tr>
+            <tr><td>端点</td><td>Endpoint 0 / IN / OUT</td><td>USB 数据传输通过端点完成。</td><td>应用程序找不到正确通道。</td></tr>
+            <tr><td>供电</td><td>VBUS 5V</td><td>部分设备由 USB 供电，部分需要外部供电。</td><td>设备反复掉线、无法枚举。</td></tr>
+            <tr><td>带宽</td><td>取决于 USB 版本和设备</td><td>视频、相机、大量数据会占用较高带宽。</td><td>丢帧、卡顿、设备断连。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="container reveal" id="trouble">
+      <div class="section-head">
+        <h2>常见排错清单</h2>
+        <p>USB 调不通时，先看系统是否识别，再看驱动和权限，最后再看具体协议。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>硬件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>换 USB 线，确认这根线支持数据传输，不只是充电线。</span></div>
+            <div class="item"><b>02</b><span>确认设备供电是否足够，尤其是相机、采集卡、开发板。</span></div>
+            <div class="item"><b>03</b><span>换 USB 口或避免劣质 Hub，排除接触不良和带宽不足。</span></div>
+            <div class="item"><b>04</b><span>确认转接器设备侧接线正确，例如 UART、RS485、CAN。</span></div>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>软件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>Windows 看设备管理器，Linux 看 lsusb、dmesg、/dev/ttyUSB*。</span></div>
+            <div class="item"><b>02</b><span>确认驱动是否安装正确，例如 CH340、CP210x、FTDI、USB-CAN 驱动。</span></div>
+            <div class="item"><b>03</b><span>Linux 下确认串口权限，例如 dialout 组或临时 chmod。</span></div>
+            <div class="item"><b>04</b><span>确认应用程序没有重复占用同一个 USB 设备或串口。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal">
+      <div class="section-head">
+        <h2>继续学习</h2>
+        <p>USB 详细页完成后，硬件接口部分还可以补 RS232、电平转换；网络通信部分可以开始补 Ethernet。</p>
+      </div>
+      <div class="next-grid">
+        <a class="next-card" href="communication.html">
+          <span>Back</span>
+          <h3>通信基础总览</h3>
+          <p>返回通信协议与接口知识库。</p>
+        </a>
+        <a class="next-card" href="spi.html">
+          <span>Review</span>
+          <h3>SPI 详细页</h3>
+          <p>回顾板级高速同步通信接口。</p>
+        </a>
+        <a class="next-card" href="ethernet.html">
+          <span>Next</span>
+          <h3>Ethernet 详细页</h3>
+          <p>下一步整理网口、IP、子网、TCP/UDP 和局域网通信。</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© 2026 sphyx.dev · USB Basics</div>
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const revealItems = document.querySelectorAll('.reveal');
+    const fields = document.querySelectorAll('.field');
+    const fieldDetail = document.getElementById('fieldDetail');
+
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const width = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = `${width}%`;
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('show');
+      });
+    }, { threshold: 0.12 });
+
+    revealItems.forEach((item) => observer.observe(item));
+
+    fields.forEach((field) => {
+      field.addEventListener('click', () => {
+        fields.forEach((item) => item.classList.remove('active'));
+        field.classList.add('active');
+        fieldDetail.innerHTML = `<b>${field.dataset.title}：</b>${field.dataset.desc}`;
+      });
+    });
+  </script>
+</body>
+</html>
