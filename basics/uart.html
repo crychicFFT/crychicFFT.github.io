@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UART 串口通信详解 | sphyx.dev</title>
+  <style>
+    :root {
+      --bg: #101116;
+      --panel: rgba(255, 255, 255, 0.055);
+      --panel-strong: rgba(255, 255, 255, 0.095);
+      --line: rgba(255, 255, 255, 0.115);
+      --text: #f5f5f4;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --accent: #f5f5f4;
+      --dark: #090a0d;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .bg {
+      position: fixed;
+      inset: -20%;
+      z-index: -2;
+      background:
+        radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.078), transparent 28%),
+        radial-gradient(circle at 72% 8%, rgba(255, 255, 255, 0.052), transparent 32%),
+        linear-gradient(135deg, #090a0d 0%, #101116 50%, #17181d 100%);
+      animation: bgFloat 18s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgFloat {
+      from { transform: translate3d(-1%, -0.5%, 0) scale(1); }
+      to { transform: translate3d(1%, 1%, 0) scale(1.03); }
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.12;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+      animation: gridMove 24s linear infinite;
+    }
+
+    @keyframes gridMove {
+      from { transform: translateY(0); }
+      to { transform: translateY(56px); }
+    }
+
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 3px;
+      z-index: 100;
+      background: linear-gradient(90deg, #777, #f5f5f4, #777);
+    }
+
+    .container {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+      background: rgba(16, 17, 22, 0.72);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav {
+      height: 68px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #101116;
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      box-shadow: 0 0 34px rgba(245, 245, 244, 0.16);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links a {
+      transition: color 0.25s ease, transform 0.25s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      transform: translateY(-2px);
+    }
+
+    .hero {
+      padding: 86px 0 42px;
+    }
+
+    .crumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 26px;
+      color: var(--muted);
+      font-size: 14px;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .crumb a:hover {
+      color: var(--text);
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 22px;
+      font-size: clamp(42px, 7vw, 86px);
+      line-height: 1;
+      letter-spacing: -0.075em;
+      animation: fadeUp 0.75s 0.08s ease both;
+    }
+
+    .gradient {
+      color: transparent;
+      background: linear-gradient(120deg, #fff, #d4d4d8 50%, #8b8b92);
+      -webkit-background-clip: text;
+      background-clip: text;
+      background-size: 220% 220%;
+      animation: textShift 7s ease-in-out infinite alternate;
+    }
+
+    @keyframes textShift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
+    }
+
+    .lead {
+      max-width: 780px;
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.9;
+      animation: fadeUp 0.75s 0.16s ease both;
+    }
+
+    .quick-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      animation: fadeUp 0.75s 0.24s ease both;
+    }
+
+    .quick-nav a {
+      padding: 10px 13px;
+      border-radius: 999px;
+      color: var(--soft);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--line);
+      transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+    }
+
+    .quick-nav a:hover {
+      transform: translateY(-3px);
+      color: var(--text);
+      background: var(--panel-strong);
+    }
+
+    section {
+      padding: 48px 0;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -0.06em;
+    }
+
+    .section-head p {
+      max-width: 540px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+    }
+
+    .metric {
+      padding: 22px;
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .metric:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245, 245, 244, 0.22);
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 22px;
+      letter-spacing: -0.035em;
+    }
+
+    .metric p {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card {
+      padding: 26px;
+    }
+
+    .card h3 {
+      margin-bottom: 14px;
+      font-size: 24px;
+      letter-spacing: -0.045em;
+    }
+
+    .card p {
+      color: var(--muted);
+      line-height: 1.85;
+    }
+
+    .pin-list,
+    .tips {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .pin,
+    .tip {
+      display: grid;
+      grid-template-columns: 74px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .pin b,
+    .tip b {
+      color: var(--text);
+    }
+
+    .pin span,
+    .tip span {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .wiring-stage {
+      position: relative;
+      min-height: 360px;
+      overflow: hidden;
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 36px 36px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .device {
+      position: absolute;
+      width: 148px;
+      padding: 18px 16px;
+      border-radius: 24px;
+      text-align: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.13);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.24);
+      z-index: 2;
+    }
+
+    .device strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .device small {
+      color: var(--muted);
+    }
+
+    .mcu { left: 9%; top: 104px; }
+    .module { right: 9%; top: 104px; }
+
+    .wire {
+      position: absolute;
+      left: 24%;
+      right: 24%;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      overflow: hidden;
+    }
+
+    .wire::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 30%;
+      background: linear-gradient(90deg, transparent, rgba(245,245,244,0.95), transparent);
+      transform: translateX(-120%);
+      animation: wireFlow 2.6s ease-in-out infinite;
+    }
+
+    .wire.tx { top: 132px; }
+    .wire.rx { top: 180px; }
+    .wire.gnd { top: 228px; opacity: 0.7; }
+
+    .wire.rx::after { animation-delay: 0.8s; }
+    .wire.gnd::after { animation: none; }
+
+    @keyframes wireFlow {
+      to { transform: translateX(360%); }
+    }
+
+    .wire-label {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--soft);
+      font-size: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.09);
+      z-index: 3;
+    }
+
+    .label-tx { top: 116px; }
+    .label-rx { top: 164px; }
+    .label-gnd { top: 212px; }
+
+    .note-box {
+      position: absolute;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      width: min(82%, 520px);
+      padding: 13px 16px;
+      border-radius: 18px;
+      color: var(--soft);
+      text-align: center;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+    }
+
+    .frame-lab {
+      display: grid;
+      grid-template-columns: 0.86fr 1.14fr;
+      gap: 20px;
+    }
+
+    .frame-stage {
+      position: relative;
+      min-height: 410px;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    .demo-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .demo-title {
+      color: var(--soft);
+      font-weight: 760;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      padding: 9px 12px;
+      border-radius: 12px;
+      color: #111216;
+      font-weight: 760;
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      transition: transform 0.22s ease, opacity 0.22s ease;
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--line);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+    }
+
+    .bit-stream {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .bit-card {
+      cursor: pointer;
+      min-width: 72px;
+      padding: 12px 10px;
+      text-align: center;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.065);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .bit-card:hover,
+    .bit-card.active {
+      transform: translateY(-5px);
+      background: rgba(245,245,244,0.16);
+      border-color: rgba(245,245,244,0.28);
+    }
+
+    .bit-card b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 20px;
+    }
+
+    .bit-card span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .wavebox {
+      position: relative;
+      height: 170px;
+      border-radius: 22px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 30px 30px;
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .wave-line {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 50%;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .step {
+      position: absolute;
+      bottom: 42px;
+      width: 9.5%;
+      height: 36px;
+      border-top: 3px solid rgba(245,245,244,0.82);
+      border-right: 3px solid rgba(245,245,244,0.28);
+      opacity: 0.28;
+    }
+
+    .step.high { bottom: 86px; }
+
+    .running .step {
+      animation: pulseStep 1.8s ease-in-out infinite;
+    }
+
+    .running .step:nth-child(3) { animation-delay: 0.10s; }
+    .running .step:nth-child(4) { animation-delay: 0.20s; }
+    .running .step:nth-child(5) { animation-delay: 0.30s; }
+    .running .step:nth-child(6) { animation-delay: 0.40s; }
+    .running .step:nth-child(7) { animation-delay: 0.50s; }
+    .running .step:nth-child(8) { animation-delay: 0.60s; }
+    .running .step:nth-child(9) { animation-delay: 0.70s; }
+    .running .step:nth-child(10) { animation-delay: 0.80s; }
+    .running .step:nth-child(11) { animation-delay: 0.90s; }
+
+    @keyframes pulseStep {
+      0%, 100% { opacity: 0.26; filter: none; }
+      35% { opacity: 1; filter: drop-shadow(0 0 10px rgba(245,245,244,0.55)); }
+    }
+
+    .cursor-dot {
+      position: absolute;
+      left: 20px;
+      top: 78px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #f5f5f4;
+      box-shadow: 0 0 22px rgba(245,245,244,0.42);
+      opacity: 0;
+    }
+
+    .running .cursor-dot {
+      animation: dotScan 3.2s ease-in-out infinite;
+    }
+
+    @keyframes dotScan {
+      0% { opacity: 0; transform: translateX(0); }
+      10% { opacity: 1; }
+      76% { opacity: 1; transform: translateX(610px); }
+      100% { opacity: 0; transform: translateX(690px); }
+    }
+
+    .detail-box {
+      padding: 24px;
+    }
+
+    .detail-box h3 {
+      margin-bottom: 12px;
+      font-size: 24px;
+      letter-spacing: -0.045em;
+    }
+
+    .detail-box p {
+      color: var(--muted);
+      line-height: 1.85;
+    }
+
+    .status-line {
+      margin-top: 22px;
+      padding: 16px;
+      border-radius: 18px;
+      color: var(--soft);
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.08);
+      line-height: 1.75;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 17px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    th {
+      color: var(--soft);
+      font-size: 14px;
+      background: rgba(255,255,255,0.045);
+    }
+
+    td {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .next-card {
+      display: block;
+      padding: 22px;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .next-card:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .next-card span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .next-card h3 {
+      margin: 10px 0;
+      font-size: 20px;
+      letter-spacing: -0.035em;
+    }
+
+    .next-card p {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+
+    .reveal.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    footer {
+      padding: 40px 0 58px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 920px) {
+      .nav-links { display: none; }
+      .overview-grid,
+      .two-col,
+      .frame-lab,
+      .next-grid { grid-template-columns: 1fr; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 12px; }
+      .mcu { left: 5%; }
+      .module { right: 5%; }
+      .wire { left: 28%; right: 28%; }
+      @keyframes dotScan {
+        0% { opacity: 0; transform: translateX(0); }
+        10% { opacity: 1; }
+        76% { opacity: 1; transform: translateX(430px); }
+        100% { opacity: 0; transform: translateX(480px); }
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 26px, 1120px); }
+      .demo-top { display: block; }
+      .controls { margin-top: 12px; }
+      .device { width: 110px; padding: 14px 12px; }
+      .wire { left: 30%; right: 30%; }
+      .wire-label { font-size: 11px; }
+      .bit-card { min-width: 62px; }
+      .pin,
+      .tip { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <div class="bg"></div>
+  <div class="grid"></div>
+
+  <header>
+    <nav class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">S</span>
+        <span>sphyx.dev</span>
+      </a>
+      <div class="nav-links">
+        <a href="communication.html">通信总览</a>
+        <a href="#pins">引脚</a>
+        <a href="#frame">帧结构</a>
+        <a href="#wiring">接线</a>
+        <a href="#trouble">排错</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="container hero">
+      <div class="crumb">
+        <a href="../index.html">首页</a>
+        <span>/</span>
+        <a href="communication.html">通信基础知识</a>
+        <span>/</span>
+        <span>UART</span>
+      </div>
+      <h1>UART 串口通信<span class="gradient">详细页</span></h1>
+      <p class="lead">
+        UART 是最常见的基础通信接口之一。它适合点对点、低到中速、调试友好的设备通信。这个页面先建立完整框架：概念、引脚、帧结构、接线方式、动画演示和常见排错。
+      </p>
+      <div class="quick-nav">
+        <a href="#overview">核心概念</a>
+        <a href="#pins">引脚说明</a>
+        <a href="#frame">帧结构动画</a>
+        <a href="#wiring">接线示意</a>
+        <a href="#compare">常见参数</a>
+        <a href="#trouble">排错清单</a>
+      </div>
+    </section>
+
+    <section class="container reveal" id="overview">
+      <div class="section-head">
+        <h2>核心概念</h2>
+        <p>先把 UART 看成两台设备之间的一条“文字通道”：一端 TX 发，一端 RX 收，双方提前约定通信速度。</p>
+      </div>
+      <div class="overview-grid">
+        <div class="panel metric">
+          <span>Mode</span>
+          <strong>异步通信</strong>
+          <p>没有单独时钟线，发送端和接收端通过相同波特率来理解数据位。</p>
+        </div>
+        <div class="panel metric">
+          <span>Wires</span>
+          <strong>TX / RX / GND</strong>
+          <p>基础通信至少需要发送线、接收线和共地。很多调试串口就是这三根线。</p>
+        </div>
+        <div class="panel metric">
+          <span>Frame</span>
+          <strong>起始位 + 数据位 + 停止位</strong>
+          <p>接收端通过起始位发现一帧开始，然后按约定节奏采样数据位。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="pins">
+      <div class="section-head">
+        <h2>引脚说明</h2>
+        <p>UART 最容易出错的地方是 TX/RX 接反、没有共地、波特率不一致。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>常见引脚</h3>
+          <p>不同开发板、USB 转串口模块、传感器模块的标注可能不同，但核心逻辑相同。</p>
+          <div class="pin-list">
+            <div class="pin"><b>TX</b><span>Transmit，发送端输出。连接到对方的 RX。</span></div>
+            <div class="pin"><b>RX</b><span>Receive，接收端输入。连接到对方的 TX。</span></div>
+            <div class="pin"><b>GND</b><span>公共参考地。没有共地时，电平参考可能不一致。</span></div>
+            <div class="pin"><b>VCC</b><span>电源脚，不一定需要接。调试时要确认电压是否匹配。</span></div>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>接线原则</h3>
+          <p>UART 是“交叉接线”：A 的 TX 接 B 的 RX，A 的 RX 接 B 的 TX。GND 要连接在一起。</p>
+          <div class="tips">
+            <div class="tip"><b>1</b><span>不要把 TX 接 TX、RX 接 RX，除非设备文档明确做了内部转换。</span></div>
+            <div class="tip"><b>2</b><span>注意 3.3V 与 5V 电平差异，必要时使用电平转换。</span></div>
+            <div class="tip"><b>3</b><span>常见配置格式是 115200-8-N-1：波特率 115200，8 位数据，无校验，1 位停止位。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="frame">
+      <div class="section-head">
+        <h2>帧结构动画</h2>
+        <p>点击下面不同字段，可以查看它们在一帧 UART 数据中的作用。</p>
+      </div>
+      <div class="frame-lab">
+        <div class="panel frame-stage running" id="frameDemo">
+          <div class="demo-top">
+            <div class="demo-title">示例帧：Start + 8 Data + Stop</div>
+            <div class="controls">
+              <button id="playFrame">播放</button>
+              <button class="secondary" id="resetFrame">重置</button>
+            </div>
+          </div>
+          <div class="bit-stream">
+            <div class="bit-card active" data-title="起始位" data-desc="空闲状态通常为高电平。当发送端拉低电平时，接收端认为一帧数据开始。"><b>0</b><span>Start</span></div>
+            <div class="bit-card" data-title="数据位 D0" data-desc="UART 通常低位先发，也就是 D0 最先传输。"><b>1</b><span>D0</span></div>
+            <div class="bit-card" data-title="数据位 D1" data-desc="接收端会根据波特率在每个位周期中间采样。"><b>0</b><span>D1</span></div>
+            <div class="bit-card" data-title="数据位 D2" data-desc="数据位数量常见为 8 位，也可以配置为 7 位或 9 位。"><b>1</b><span>D2</span></div>
+            <div class="bit-card" data-title="数据位 D3" data-desc="如果双方波特率不一致，采样点会逐渐偏移，导致乱码。"><b>1</b><span>D3</span></div>
+            <div class="bit-card" data-title="数据位 D4" data-desc="UART 本身不规定数据含义，它只负责按位传输。"><b>0</b><span>D4</span></div>
+            <div class="bit-card" data-title="数据位 D5" data-desc="上层协议可以把这些字节解释成命令、地址、长度或校验。"><b>0</b><span>D5</span></div>
+            <div class="bit-card" data-title="数据位 D6" data-desc="调试串口经常直接传 ASCII 字符。"><b>1</b><span>D6</span></div>
+            <div class="bit-card" data-title="数据位 D7" data-desc="8 个数据位组合成一个字节。"><b>0</b><span>D7</span></div>
+            <div class="bit-card" data-title="停止位" data-desc="停止位通常为高电平，用来表示一帧结束，并给接收端留出恢复时间。"><b>1</b><span>Stop</span></div>
+          </div>
+          <div class="wavebox">
+            <div class="wave-line"></div>
+            <span class="step" style="left: 4%"></span>
+            <span class="step high" style="left: 13.5%"></span>
+            <span class="step" style="left: 23%"></span>
+            <span class="step high" style="left: 32.5%"></span>
+            <span class="step high" style="left: 42%"></span>
+            <span class="step" style="left: 51.5%"></span>
+            <span class="step" style="left: 61%"></span>
+            <span class="step high" style="left: 70.5%"></span>
+            <span class="step" style="left: 80%"></span>
+            <span class="step high" style="left: 89.5%"></span>
+            <span class="cursor-dot"></span>
+          </div>
+        </div>
+
+        <div class="panel detail-box">
+          <h3 id="bitTitle">起始位</h3>
+          <p id="bitDesc">空闲状态通常为高电平。当发送端拉低电平时，接收端认为一帧数据开始。</p>
+          <div class="status-line">
+            <b>理解重点：</b> UART 没有时钟线，所以接收端必须依赖“起始位 + 波特率”来判断后续每一位的位置。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="wiring">
+      <div class="section-head">
+        <h2>接线示意</h2>
+        <p>真实项目中，先确认电平、电源、共地，再确认 TX/RX 是否交叉。</p>
+      </div>
+      <div class="panel card">
+        <div class="wiring-stage">
+          <div class="device mcu"><strong>MCU / PC</strong><small>控制端</small></div>
+          <div class="device module"><strong>Sensor</strong><small>外设模块</small></div>
+          <div class="wire tx"></div>
+          <div class="wire rx"></div>
+          <div class="wire gnd"></div>
+          <div class="wire-label label-tx">TX → RX</div>
+          <div class="wire-label label-rx">RX ← TX</div>
+          <div class="wire-label label-gnd">GND ↔ GND</div>
+          <div class="note-box">UART 基础接线：交叉收发 + 共地。VCC 是否连接取决于模块供电方式。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="compare">
+      <div class="section-head">
+        <h2>常见参数</h2>
+        <p>串口能否正常通信，经常取决于两端参数是否一致。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>参数</th>
+              <th>常见值</th>
+              <th>说明</th>
+              <th>错误表现</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>波特率</td>
+              <td>9600 / 115200 / 1Mbps</td>
+              <td>每秒传输符号数，双方必须一致。</td>
+              <td>乱码、收不到完整数据。</td>
+            </tr>
+            <tr>
+              <td>数据位</td>
+              <td>8 bit</td>
+              <td>一帧中真正承载数据的位数。</td>
+              <td>字节解析异常。</td>
+            </tr>
+            <tr>
+              <td>校验位</td>
+              <td>None / Even / Odd</td>
+              <td>用于基础错误检测。</td>
+              <td>接收报错或数据被丢弃。</td>
+            </tr>
+            <tr>
+              <td>停止位</td>
+              <td>1 / 2 bit</td>
+              <td>表示一帧结束。</td>
+              <td>帧错误、通信不稳定。</td>
+            </tr>
+            <tr>
+              <td>电平</td>
+              <td>3.3V / 5V / TTL</td>
+              <td>不同设备电平要兼容。</td>
+              <td>无法识别，甚至损坏 IO。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="container reveal" id="trouble">
+      <div class="section-head">
+        <h2>常见排错清单</h2>
+        <p>串口调不通时，不要一开始怀疑代码，先按硬件和参数逐项排查。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>硬件排查</h3>
+          <div class="tips">
+            <div class="tip"><b>01</b><span>确认 TX/RX 是否交叉连接。</span></div>
+            <div class="tip"><b>02</b><span>确认两端是否共地。</span></div>
+            <div class="tip"><b>03</b><span>确认 3.3V / 5V 电平是否兼容。</span></div>
+            <div class="tip"><b>04</b><span>确认 USB 转串口芯片驱动是否正常。</span></div>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>软件排查</h3>
+          <div class="tips">
+            <div class="tip"><b>01</b><span>确认波特率、数据位、校验位、停止位一致。</span></div>
+            <div class="tip"><b>02</b><span>确认串口号是否选对，例如 Linux 下的 /dev/ttyUSB0。</span></div>
+            <div class="tip"><b>03</b><span>确认程序是否有串口权限。</span></div>
+            <div class="tip"><b>04</b><span>用串口助手先测试，再写复杂程序。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal">
+      <div class="section-head">
+        <h2>继续学习</h2>
+        <p>UART 是基础，后续可以对比 RS485 和 CAN，理解为什么工业现场更常用总线。</p>
+      </div>
+      <div class="next-grid">
+        <a class="next-card" href="communication.html">
+          <span>Back</span>
+          <h3>通信基础总览</h3>
+          <p>返回通信基础知识页面，查看所有接口动画。</p>
+        </a>
+        <a class="next-card" href="rs485.html">
+          <span>Next</span>
+          <h3>RS485 详细页</h3>
+          <p>理解差分信号、多节点总线和 Modbus RTU 应用。</p>
+        </a>
+        <a class="next-card" href="can.html">
+          <span>Next</span>
+          <h3>CAN 详细页</h3>
+          <p>理解 CAN_H / CAN_L、报文 ID 和总线仲裁机制。</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© 2026 sphyx.dev · UART Basics</div>
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const revealItems = document.querySelectorAll('.reveal');
+    const frameDemo = document.getElementById('frameDemo');
+    const playFrame = document.getElementById('playFrame');
+    const resetFrame = document.getElementById('resetFrame');
+    const bitCards = document.querySelectorAll('.bit-card');
+    const bitTitle = document.getElementById('bitTitle');
+    const bitDesc = document.getElementById('bitDesc');
+
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const width = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = `${width}%`;
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('show');
+      });
+    }, { threshold: 0.12 });
+
+    revealItems.forEach((item) => observer.observe(item));
+
+    playFrame.addEventListener('click', () => {
+      frameDemo.classList.add('running');
+    });
+
+    resetFrame.addEventListener('click', () => {
+      frameDemo.classList.remove('running');
+      void frameDemo.offsetWidth;
+      frameDemo.classList.add('running');
+    });
+
+    bitCards.forEach((card) => {
+      card.addEventListener('click', () => {
+        bitCards.forEach((item) => item.classList.remove('active'));
+        card.classList.add('active');
+        bitTitle.textContent = card.dataset.title;
+        bitDesc.textContent = card.dataset.desc;
+      });
+    });
+  </script>
+</body>
+</html>
