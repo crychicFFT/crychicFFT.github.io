@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPI 通信详解 | sphyx.dev</title>
+  <style>
+    :root {
+      --bg: #101116;
+      --panel: rgba(255, 255, 255, 0.055);
+      --panel-strong: rgba(255, 255, 255, 0.095);
+      --line: rgba(255, 255, 255, 0.115);
+      --text: #f5f5f4;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .bg {
+      position: fixed;
+      inset: -20%;
+      z-index: -2;
+      background:
+        radial-gradient(circle at 26% 18%, rgba(255,255,255,0.078), transparent 28%),
+        radial-gradient(circle at 72% 8%, rgba(255,255,255,0.052), transparent 32%),
+        linear-gradient(135deg, #090a0d 0%, #101116 50%, #17181d 100%);
+      animation: bgFloat 18s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgFloat {
+      from { transform: translate3d(-1%, -0.5%, 0) scale(1); }
+      to { transform: translate3d(1%, 1%, 0) scale(1.03); }
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.12;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+      animation: gridMove 24s linear infinite;
+    }
+
+    @keyframes gridMove {
+      from { transform: translateY(0); }
+      to { transform: translateY(56px); }
+    }
+
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 3px;
+      z-index: 100;
+      background: linear-gradient(90deg, #777, #f5f5f4, #777);
+    }
+
+    .container {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+      background: rgba(16,17,22,0.72);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav {
+      height: 68px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #101116;
+      background: linear-gradient(135deg, #f5f5f4, #a1a1aa);
+      box-shadow: 0 0 34px rgba(245,245,244,0.16);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links a { transition: color 0.25s ease, transform 0.25s ease; }
+    .nav-links a:hover { color: var(--text); transform: translateY(-2px); }
+
+    .hero { padding: 86px 0 42px; }
+
+    .crumb {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 26px;
+      color: var(--muted);
+      font-size: 14px;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .crumb a:hover { color: var(--text); }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 22px;
+      font-size: clamp(42px, 7vw, 86px);
+      line-height: 1;
+      letter-spacing: -0.075em;
+      animation: fadeUp 0.75s 0.08s ease both;
+    }
+
+    .gradient {
+      color: transparent;
+      background: linear-gradient(120deg, #fff, #d4d4d8 50%, #8b8b92);
+      -webkit-background-clip: text;
+      background-clip: text;
+      background-size: 220% 220%;
+      animation: textShift 7s ease-in-out infinite alternate;
+    }
+
+    @keyframes textShift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
+    }
+
+    .lead {
+      max-width: 790px;
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.9;
+      animation: fadeUp 0.75s 0.16s ease both;
+    }
+
+    .quick-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      animation: fadeUp 0.75s 0.24s ease both;
+    }
+
+    .quick-nav a {
+      padding: 10px 13px;
+      border-radius: 999px;
+      color: var(--soft);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--line);
+      transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+    }
+
+    .quick-nav a:hover {
+      transform: translateY(-3px);
+      color: var(--text);
+      background: var(--panel-strong);
+    }
+
+    section { padding: 48px 0; }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -0.06em;
+    }
+
+    .section-head p {
+      max-width: 560px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .metric {
+      padding: 22px;
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .metric:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 22px;
+      letter-spacing: -0.035em;
+    }
+
+    .metric p {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card { padding: 26px; }
+
+    .card h3 {
+      margin-bottom: 14px;
+      font-size: 24px;
+      letter-spacing: -0.045em;
+    }
+
+    .card p {
+      color: var(--muted);
+      line-height: 1.85;
+    }
+
+    .item-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 94px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .item b { color: var(--text); }
+
+    .item span {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 400px;
+      overflow: hidden;
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 36px 36px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .device {
+      position: absolute;
+      min-width: 112px;
+      padding: 15px 14px;
+      border-radius: 22px;
+      text-align: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.13);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.24);
+      z-index: 2;
+    }
+
+    .device strong { display: block; margin-bottom: 5px; }
+    .device small { color: var(--muted); }
+
+    .wire {
+      position: absolute;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.24);
+      overflow: hidden;
+    }
+
+    .wire::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 34%;
+      background: linear-gradient(90deg, transparent, rgba(245,245,244,0.95), transparent);
+      transform: translateX(-120%);
+      animation: wireFlow 2.6s ease-in-out infinite;
+    }
+
+    @keyframes wireFlow { to { transform: translateX(360%); } }
+
+    .label {
+      position: absolute;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--soft);
+      font-size: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.09);
+      z-index: 3;
+    }
+
+    .packet {
+      position: absolute;
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 14px;
+      background: rgba(245,245,244,0.10);
+      border: 1px solid rgba(245,245,244,0.22);
+      box-shadow: 0 0 24px rgba(245,245,244,0.12);
+      z-index: 4;
+      opacity: 0;
+    }
+
+    .bit {
+      min-width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #111216;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 0 5px;
+      background: #f5f5f4;
+    }
+
+    .bit.dim {
+      color: var(--text);
+      background: rgba(255,255,255,0.12);
+    }
+
+    /* SPI bus */
+    .master { left: 7%; top: 142px; }
+    .slave-a { right: 8%; top: 78px; }
+    .slave-b { right: 8%; top: 236px; }
+    .line-cs1 { left: 24%; right: 24%; top: 90px; }
+    .line-sclk { left: 24%; right: 24%; top: 150px; }
+    .line-mosi { left: 24%; right: 24%; top: 210px; }
+    .line-miso { left: 24%; right: 24%; top: 270px; }
+    .line-cs2 { left: 24%; right: 24%; top: 330px; }
+
+    .mosi-packet { left: 26%; top: 186px; }
+    .miso-packet { right: 26%; top: 246px; }
+    .running .mosi-packet { animation: mosiMove 3.8s ease-in-out infinite; }
+    .running .miso-packet { animation: misoMove 3.8s ease-in-out infinite; }
+
+    @keyframes mosiMove {
+      0% { opacity: 0; transform: translateX(0); }
+      14% { opacity: 1; }
+      72% { opacity: 1; transform: translateX(330px); }
+      100% { opacity: 0; transform: translateX(390px); }
+    }
+
+    @keyframes misoMove {
+      0% { opacity: 0; transform: translateX(0); }
+      14% { opacity: 1; }
+      72% { opacity: 1; transform: translateX(-330px); }
+      100% { opacity: 0; transform: translateX(-390px); }
+    }
+
+    .clock-dot {
+      position: absolute;
+      left: 32%;
+      top: 144px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #f5f5f4;
+      box-shadow: 0 0 22px rgba(245,245,244,0.42);
+      opacity: 0;
+    }
+
+    .running .clock-dot { animation: clockPulse 0.48s ease-in-out infinite; }
+
+    @keyframes clockPulse {
+      0%,100% { opacity: 0.18; transform: scale(0.78); }
+      50% { opacity: 1; transform: scale(1.25); }
+    }
+
+    .cs-active {
+      position: absolute;
+      left: 25%;
+      top: 75px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #111216;
+      font-weight: 800;
+      background: #f5f5f4;
+      opacity: 0;
+      z-index: 5;
+    }
+
+    .running .cs-active { animation: csShow 3.8s ease-in-out infinite; }
+    @keyframes csShow {
+      0%, 8% { opacity: 0; transform: translateY(-4px); }
+      18%, 76% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-4px); }
+    }
+
+    /* timing */
+    .timing-panel { padding: 26px; }
+    .wavebox {
+      position: relative;
+      min-height: 310px;
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        rgba(0,0,0,0.16);
+      background-size: 34px 34px;
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .wave-label {
+      position: absolute;
+      left: 24px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .wl-cs { top: 48px; }
+    .wl-sclk { top: 112px; }
+    .wl-mosi { top: 178px; }
+    .wl-miso { top: 244px; }
+
+    .base-line {
+      position: absolute;
+      left: 86px;
+      right: 34px;
+      height: 2px;
+      background: rgba(245,245,244,0.34);
+      border-radius: 999px;
+    }
+
+    .cs-low { top: 62px; opacity: 0.75; }
+    .sclk-axis { top: 126px; opacity: 0.22; }
+    .mosi-axis { top: 192px; opacity: 0.22; }
+    .miso-axis { top: 258px; opacity: 0.22; }
+
+    .clock-step {
+      position: absolute;
+      top: 104px;
+      width: 7%;
+      height: 42px;
+      border-top: 3px solid rgba(245,245,244,0.82);
+      border-right: 3px solid rgba(245,245,244,0.28);
+      opacity: 0.35;
+    }
+
+    .data-step {
+      position: absolute;
+      width: 9%;
+      height: 30px;
+      border-top: 3px solid rgba(245,245,244,0.72);
+      border-right: 3px solid rgba(245,245,244,0.24);
+      opacity: 0.32;
+    }
+
+    .data-step.high { transform: translateY(-20px); }
+    .mosi-step { top: 190px; }
+    .miso-step { top: 256px; }
+
+    .running .clock-step,
+    .running .data-step,
+    .running .cs-low {
+      animation: glowPulse 1.7s ease-in-out infinite;
+    }
+
+    .running .clock-step:nth-of-type(5) { animation-delay: 0.1s; }
+    .running .clock-step:nth-of-type(6) { animation-delay: 0.2s; }
+    .running .clock-step:nth-of-type(7) { animation-delay: 0.3s; }
+    .running .clock-step:nth-of-type(8) { animation-delay: 0.4s; }
+
+    @keyframes glowPulse {
+      0%,100% { opacity: 0.28; filter: none; }
+      45% { opacity: 1; filter: drop-shadow(0 0 10px rgba(245,245,244,0.55)); }
+    }
+
+    /* fields */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+
+    .field {
+      cursor: pointer;
+      min-height: 86px;
+      padding: 13px 10px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.09);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .field:hover, .field.active {
+      transform: translateY(-6px);
+      background: rgba(245,245,244,0.15);
+      border-color: rgba(245,245,244,0.28);
+    }
+
+    .field b { display: block; margin-bottom: 8px; font-size: 16px; }
+    .field span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .field-detail {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 20px;
+      color: var(--soft);
+      line-height: 1.8;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 780px;
+    }
+
+    th, td {
+      padding: 17px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    th {
+      color: var(--soft);
+      font-size: 14px;
+      background: rgba(255,255,255,0.045);
+    }
+
+    td { color: var(--muted); line-height: 1.7; }
+    tr:last-child td { border-bottom: 0; }
+
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .next-card {
+      display: block;
+      padding: 22px;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .next-card:hover {
+      transform: translateY(-6px);
+      background: var(--panel-strong);
+      border-color: rgba(245,245,244,0.22);
+    }
+
+    .next-card span { color: var(--muted); font-size: 13px; }
+    .next-card h3 { margin: 10px 0; font-size: 20px; letter-spacing: -0.035em; }
+    .next-card p { color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+
+    .reveal.show { opacity: 1; transform: translateY(0); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    footer {
+      padding: 40px 0 58px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 920px) {
+      .nav-links { display: none; }
+      .overview-grid, .two-col, .next-grid { grid-template-columns: 1fr; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 12px; }
+      .field-grid { grid-template-columns: repeat(2, 1fr); }
+
+      @keyframes mosiMove {
+        0% { opacity: 0; transform: translateX(0); }
+        14% { opacity: 1; }
+        72% { opacity: 1; transform: translateX(230px); }
+        100% { opacity: 0; transform: translateX(280px); }
+      }
+
+      @keyframes misoMove {
+        0% { opacity: 0; transform: translateX(0); }
+        14% { opacity: 1; }
+        72% { opacity: 1; transform: translateX(-230px); }
+        100% { opacity: 0; transform: translateX(-280px); }
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 26px, 1120px); }
+      .device { min-width: 86px; padding: 12px 10px; font-size: 13px; }
+      .bit { min-width: 21px; height: 21px; font-size: 11px; }
+      .item { grid-template-columns: 1fr; }
+      .field-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <div class="bg"></div>
+  <div class="grid"></div>
+
+  <header>
+    <nav class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">S</span>
+        <span>sphyx.dev</span>
+      </a>
+      <div class="nav-links">
+        <a href="communication.html">通信总览</a>
+        <a href="#bus">总线</a>
+        <a href="#timing">时序</a>
+        <a href="#mode">模式</a>
+        <a href="#trouble">排错</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="container hero">
+      <div class="crumb">
+        <a href="../index.html">首页</a>
+        <span>/</span>
+        <a href="communication.html">通信基础知识</a>
+        <span>/</span>
+        <span>SPI</span>
+      </div>
+      <h1>SPI 通信<span class="gradient">详细页</span></h1>
+      <p class="lead">
+        SPI 是常见的高速同步通信接口，通常由主机产生时钟，通过 MOSI 向从机发送数据，同时通过 MISO 从从机读取数据。它速度快、逻辑直接，但占用引脚比 I2C 更多。
+      </p>
+      <div class="quick-nav">
+        <a href="#overview">核心概念</a>
+        <a href="#bus">总线结构</a>
+        <a href="#timing">时序动画</a>
+        <a href="#mode">字段与模式</a>
+        <a href="#compare">参数与应用</a>
+        <a href="#trouble">排错清单</a>
+      </div>
+    </section>
+
+    <section class="container reveal" id="overview">
+      <div class="section-head">
+        <h2>核心概念</h2>
+        <p>SPI 的重点是“主机控制时钟、片选选择从机、MOSI/MISO 同时传输”。</p>
+      </div>
+      <div class="overview-grid">
+        <div class="panel metric">
+          <span>Mode</span>
+          <strong>同步通信</strong>
+          <p>主机通过 SCLK 提供时钟，从机按时钟节拍发送或接收数据。</p>
+        </div>
+        <div class="panel metric">
+          <span>Wires</span>
+          <strong>SCLK / MOSI / MISO / CS</strong>
+          <p>常见四类信号，多个从机通常需要多个片选 CS。</p>
+        </div>
+        <div class="panel metric">
+          <span>Feature</span>
+          <strong>高速全双工</strong>
+          <p>主机发送数据的同时，也可以从从机接收数据。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="bus">
+      <div class="section-head">
+        <h2>总线结构动画</h2>
+        <p>SPI 通常由一个主机控制多个从机。SCLK、MOSI、MISO 可以共享，CS 用来选择当前通信的从机。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>接线重点</h3>
+          <p>SPI 比 I2C 更快，但线更多。一个主机挂多个从机时，每个从机通常需要独立 CS 片选线。</p>
+          <div class="item-list">
+            <div class="item"><b>SCLK</b><span>Serial Clock，主机输出时钟，控制数据采样节奏。</span></div>
+            <div class="item"><b>MOSI</b><span>Master Out Slave In，主机发往从机的数据线。</span></div>
+            <div class="item"><b>MISO</b><span>Master In Slave Out，从机返回主机的数据线。</span></div>
+            <div class="item"><b>CS / SS</b><span>片选信号，通常低电平有效，用于选择某个从机。</span></div>
+          </div>
+        </div>
+
+        <div class="panel card running">
+          <div class="stage">
+            <div class="device master"><strong>Master</strong><small>MCU / 主机</small></div>
+            <div class="device slave-a"><strong>Slave A</strong><small>Flash / Screen</small></div>
+            <div class="device slave-b"><strong>Slave B</strong><small>ADC / Module</small></div>
+            <div class="wire line-cs1"></div>
+            <div class="wire line-sclk"></div>
+            <div class="wire line-mosi"></div>
+            <div class="wire line-miso"></div>
+            <div class="wire line-cs2"></div>
+            <span class="label" style="left:25%;top:73px">CS_A</span>
+            <span class="label" style="left:25%;top:134px">SCLK</span>
+            <span class="label" style="left:25%;top:194px">MOSI</span>
+            <span class="label" style="left:25%;top:254px">MISO</span>
+            <span class="label" style="left:25%;top:314px">CS_B</span>
+            <span class="cs-active">CS_A 有效</span>
+            <div class="clock-dot"></div>
+            <div class="packet mosi-packet"><span class="bit">CMD</span><span class="bit dim">0x9F</span></div>
+            <div class="packet miso-packet"><span class="bit dim">ID</span><span class="bit">DATA</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="timing">
+      <div class="section-head">
+        <h2>时序动画</h2>
+        <p>SPI 通过 SCLK 边沿采样数据。MOSI 和 MISO 可以在同一组时钟下同时传输。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel timing-panel running">
+          <div class="wavebox">
+            <span class="wave-label wl-cs">CS</span>
+            <span class="wave-label wl-sclk">SCLK</span>
+            <span class="wave-label wl-mosi">MOSI</span>
+            <span class="wave-label wl-miso">MISO</span>
+            <div class="base-line cs-low"></div>
+            <div class="base-line sclk-axis"></div>
+            <div class="base-line mosi-axis"></div>
+            <div class="base-line miso-axis"></div>
+            <span class="clock-step" style="left:12%"></span>
+            <span class="clock-step" style="left:22%"></span>
+            <span class="clock-step" style="left:32%"></span>
+            <span class="clock-step" style="left:42%"></span>
+            <span class="clock-step" style="left:52%"></span>
+            <span class="clock-step" style="left:62%"></span>
+            <span class="data-step mosi-step high" style="left:14%"></span>
+            <span class="data-step mosi-step" style="left:27%"></span>
+            <span class="data-step mosi-step high" style="left:40%"></span>
+            <span class="data-step mosi-step high" style="left:53%"></span>
+            <span class="data-step miso-step" style="left:14%"></span>
+            <span class="data-step miso-step high" style="left:27%"></span>
+            <span class="data-step miso-step" style="left:40%"></span>
+            <span class="data-step miso-step high" style="left:53%"></span>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>怎么看 SPI 时序？</h3>
+          <p>先看 CS 是否有效，再看 SCLK 的极性与相位，最后看 MOSI/MISO 数据在哪个边沿被采样。不同设备手册会规定 SPI Mode 0/1/2/3。</p>
+          <div class="item-list">
+            <div class="item"><b>CS 有效</b><span>从机被选中后才响应 SCLK 和数据。</span></div>
+            <div class="item"><b>SCLK</b><span>主机输出时钟，从机按指定边沿采样数据。</span></div>
+            <div class="item"><b>全双工</b><span>主机每发出一个 bit，通常也会同时读回一个 bit。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="mode">
+      <div class="section-head">
+        <h2>字段与模式</h2>
+        <p>SPI 没有统一的“标准帧格式”，很多细节由具体芯片手册定义。点击字段查看说明。</p>
+      </div>
+      <div class="panel card">
+        <div class="field-grid">
+          <div class="field active" data-title="CS 片选" data-desc="片选信号用于选择目标从机。常见为低电平有效。多个从机通常需要多个 CS。"><b>CS</b><span>选择从机</span></div>
+          <div class="field" data-title="SCLK 时钟" data-desc="SCLK 由主机产生，决定数据移位和采样的节奏。SPI 是同步通信，所以时钟非常关键。"><b>SCLK</b><span>同步时钟</span></div>
+          <div class="field" data-title="MOSI" data-desc="MOSI 表示 Master Out Slave In，也就是主机输出、从机输入的数据线。"><b>MOSI</b><span>主机发送</span></div>
+          <div class="field" data-title="MISO" data-desc="MISO 表示 Master In Slave Out，也就是从机输出、主机输入的数据线。"><b>MISO</b><span>从机返回</span></div>
+          <div class="field" data-title="CPOL" data-desc="CPOL 表示时钟空闲状态的电平。CPOL=0 为空闲低电平，CPOL=1 为空闲高电平。"><b>CPOL</b><span>时钟极性</span></div>
+          <div class="field" data-title="CPHA" data-desc="CPHA 表示数据在哪个时钟边沿采样。CPOL 和 CPHA 组合形成 SPI Mode 0/1/2/3。"><b>CPHA</b><span>时钟相位</span></div>
+        </div>
+        <div class="field-detail" id="fieldDetail"><b>CS 片选：</b>片选信号用于选择目标从机。常见为低电平有效。多个从机通常需要多个 CS。</div>
+      </div>
+    </section>
+
+    <section class="container reveal" id="compare">
+      <div class="section-head">
+        <h2>参数与应用</h2>
+        <p>SPI 常用于高速板级外设，但线数较多，不适合长距离通信。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>常见情况</th>
+              <th>说明</th>
+              <th>错误表现</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>线数</td><td>SCLK / MOSI / MISO / CS</td><td>基础四线，多个从机需要更多 CS。</td><td>片选错会读不到目标设备。</td></tr>
+            <tr><td>速度</td><td>MHz 级常见</td><td>通常比 I2C 快，具体取决于芯片和布线。</td><td>速度太高会导致数据错位或读写失败。</td></tr>
+            <tr><td>模式</td><td>Mode 0 / 1 / 2 / 3</td><td>由 CPOL 和 CPHA 组合决定。</td><td>模式不匹配会读到错误数据。</td></tr>
+            <tr><td>位序</td><td>MSB first / LSB first</td><td>多数设备默认 MSB first。</td><td>字节位序异常，解析错误。</td></tr>
+            <tr><td>应用</td><td>Flash、屏幕、ADC、无线模块</td><td>适合高速、短距离、板级外设通信。</td><td>长线时容易受干扰。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="container reveal" id="trouble">
+      <div class="section-head">
+        <h2>常见排错清单</h2>
+        <p>SPI 调不通时，优先确认 CS、模式、时钟速度、线序和芯片手册中的读写时序。</p>
+      </div>
+      <div class="two-col">
+        <div class="panel card">
+          <h3>硬件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>确认 SCLK、MOSI、MISO、CS 是否接对。</span></div>
+            <div class="item"><b>02</b><span>确认主从设备电平是否一致，例如 3.3V 与 5V。</span></div>
+            <div class="item"><b>03</b><span>确认 CS 是否真的拉到有效电平。</span></div>
+            <div class="item"><b>04</b><span>降低时钟速度测试，排除布线和信号完整性问题。</span></div>
+          </div>
+        </div>
+        <div class="panel card">
+          <h3>软件排查</h3>
+          <div class="item-list">
+            <div class="item"><b>01</b><span>确认 SPI Mode 是否和芯片手册一致。</span></div>
+            <div class="item"><b>02</b><span>确认 MSB/LSB 位序设置是否正确。</span></div>
+            <div class="item"><b>03</b><span>确认读操作前是否需要先发送命令字或寄存器地址。</span></div>
+            <div class="item"><b>04</b><span>确认每次传输前后 CS 的拉低和释放时序。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container reveal">
+      <div class="section-head">
+        <h2>继续学习</h2>
+        <p>SPI 详细页完成后，基础硬件接口还可以继续补 USB、RS232 和电平转换。</p>
+      </div>
+      <div class="next-grid">
+        <a class="next-card" href="communication.html">
+          <span>Back</span>
+          <h3>通信基础总览</h3>
+          <p>返回通信协议与接口知识库。</p>
+        </a>
+        <a class="next-card" href="i2c.html">
+          <span>Review</span>
+          <h3>I2C 详细页</h3>
+          <p>对比 I2C 的双线、多从机和上拉电阻结构。</p>
+        </a>
+        <a class="next-card" href="usb.html">
+          <span>Next</span>
+          <h3>USB 详细页</h3>
+          <p>下一步整理 USB 通信、USB 转串口、USB-CAN 和设备枚举。</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© 2026 sphyx.dev · SPI Basics</div>
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const revealItems = document.querySelectorAll('.reveal');
+    const fields = document.querySelectorAll('.field');
+    const fieldDetail = document.getElementById('fieldDetail');
+
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const width = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = `${width}%`;
+    }
+
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('show');
+      });
+    }, { threshold: 0.12 });
+
+    revealItems.forEach((item) => observer.observe(item));
+
+    fields.forEach((field) => {
+      field.addEventListener('click', () => {
+        fields.forEach((item) => item.classList.remove('active'));
+        field.classList.add('active');
+        fieldDetail.innerHTML = `<b>${field.dataset.title}：</b>${field.dataset.desc}`;
+      });
+    });
+  </script>
+</body>
+</html>
